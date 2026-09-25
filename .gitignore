@@ -1,0 +1,11 @@
+# 数据与运行产物(可再生, 不入库)
+user_data/data/
+user_data/logs/
+user_data/backtest_results/
+user_data/hyperopt_results/
+user_data/*.sqlite
+user_data/ml_signals.csv
+user_data/notebooks/
+*.pyc
+__pycache__/
+.env
