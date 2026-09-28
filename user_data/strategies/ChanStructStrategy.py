@@ -420,6 +420,33 @@ class ChanStructStrategy(IStrategy):
         """子类钩子: 按入场标签定制初始结构止损价(返回None走默认笔低点逻辑)"""
         return None
 
+    @staticmethod
+    def _open_candle_index(dates: pd.Series, open_date) -> int:
+        """开仓时刻在 date 列上的 searchsorted。
+
+        K线 date 常为 datetime64[ms, UTC], trade.open_date_utc 是微秒 datetime。
+        pandas 2.2+ 在精度降级不保真时抛 ValueError('Cannot losslessly convert units')。
+        先把开仓时刻对齐到列的分辨率再查找。
+        """
+        target = pd.Timestamp(open_date)
+        dtype = dates.dtype
+        tz = getattr(dtype, "tz", None)
+        unit = getattr(dtype, "unit", None)
+        if unit is None:
+            name = getattr(dtype, "name", "")
+            if isinstance(name, str) and name.startswith("datetime64[") and "," not in name:
+                unit = name[len("datetime64["):-1]
+        if tz is not None:
+            if target.tzinfo is None:
+                target = target.tz_localize("UTC")
+            else:
+                target = target.tz_convert(tz)
+        elif target.tzinfo is not None:
+            target = target.tz_convert("UTC").tz_localize(None)
+        if unit:
+            target = target.floor(unit).as_unit(unit)
+        return int(dates.searchsorted(target, side="right")) - 1
+
     def _entry_stop_price(self, pair: str, trade: Trade) -> Optional[float]:
         """入场结构止损: 入场时刻结构位 + 宽垫, 开仓时一次性确定并缓存"""
         cached = trade.get_custom_data("chan_entry_stop")
@@ -429,7 +456,7 @@ class ChanStructStrategy(IStrategy):
         if dataframe is None or len(dataframe) == 0:
             return None
         # 取开仓K线那一行(行上记录的是入场时刻的结构状态, 不会追溯变化)
-        idx = int(dataframe["date"].searchsorted(trade.open_date_utc, side="right")) - 1
+        idx = self._open_candle_index(dataframe["date"], trade.open_date_utc)
         row = dataframe.iloc[max(idx, 0)]
         price = self._special_entry_stop(pair, trade, row)
         if price is None:

@@ -402,7 +402,7 @@ class ChanFuturesStrategy(ChanStructStrategy):
         dataframe, _ = self.dp.get_analyzed_dataframe(pair, self.timeframe)
         if dataframe is None or len(dataframe) == 0:
             return None
-        idx = int(dataframe["date"].searchsorted(trade.open_date_utc, side="right")) - 1
+        idx = self._open_candle_index(dataframe["date"], trade.open_date_utc)
         row = dataframe.iloc[max(idx, 0)]
         price = self._special_entry_stop(pair, trade, row)
         if price is None:
